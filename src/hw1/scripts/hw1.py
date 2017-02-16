@@ -64,7 +64,6 @@ def GetHRotationMatrix(roll,pitch,yaw):
 	yaw_mat[1,0] =  math.sin(yaw)
 	yaw_mat[1,1] =  math.cos(yaw)
 
-	#TODO: verify the order is correct (intent is RPY)
 	return np.dot(yaw_mat,np.dot(pitch_mat, roll_mat))
 class MyRobot:
 
@@ -117,9 +116,8 @@ class MyRobot:
 	# i: the joint to construct the homogeneous transform for
 	# returns the transform from the ith to the i+1th
 	def constructA(self, i):
-		d, theta, a ,alpha= self.dhParams[i]
-		# TODO: complete this function to get a homogeneous transform from frame i to i+1 using the D-H params and return it
-		#create a 4x4 homogeneous matrix
+		#d, theta, a ,alpha= self.dhParams[i]
+		a, alpha, d ,theta= self.dhParams[i]
 		h_transform = np.eye(4)
 		# Method:
 		#	Starting from the homogeneous matrix above, treat it as a vector
@@ -135,10 +133,11 @@ class MyRobot:
 		#rotate a to the new orientation
 		a_rotated = np.dot(GetHRotationMatrix(0,0,theta),GetHTranslateMatrix(a,0,0))
 		h_transform = np.dot(GetHTranslateMatrix(a_rotated[0,3] ,a_rotated[1,3],a_rotated[2,3]),h_transform)
-		#rotate alpha to the new position
 		h_transform = np.dot(GetHRotationMatrix(alpha,0,0),h_transform)
 
-		#method #2: the full matrix. This produces different results. I'm not sure why.
+
+		#alternative method #2: the full matrix. This produces different results. I'm not sure why.
+		#Reference: http://web.aeromech.usyd.edu.au//MTRX4700/Course_Documents/material/lectures/L2_Kinematics_Dynamics_2013.pdf
 		#h_transform[0,0] = math.cos(theta);
 		#h_transform[0,1] = -math.sin(theta)*math.cos(alpha);
 		#h_transform[0,2] = math.sin(theta)*math.sin(alpha);
@@ -153,7 +152,8 @@ class MyRobot:
 		#h_transform[2,2] = math.cos(theta);
 		#h_transform[2,3] = d;
 
-		#Method #3: the simple revolute-only method from Dave's slides
+
+		#alternative method #3: the simple revolute-only method from Dave's slides
 		#h_transform[0,0] = math.cos(theta);
 		#h_transform[0,1] = -math.sin(theta)
 		#h_transform[0,3] = a * math.cos(theta)
@@ -162,17 +162,15 @@ class MyRobot:
 		#h_transform[1,1] = math.cos(theta)
 		#h_transform[1,3] = a * math.sin(theta)
 
-		#print i
-		#print h_transform
+
 		return h_transform
+
 
 	# getT: computes a homogeneous transform from the ith frame to the jth frame by iteratively multiplying each homogeneous transform from i to j
 	# i is the index of the starting coordinate frame
 	# j is the index of the ending coordinate frame
 	# returns: a homogeneous transform matrix, T
-
 	def getT(self, i, j):
-		# TODO: complete this function to get a transform from the ith frame to the jth frame and return it (hint: use constructA above)
 		h_cummulative = np.eye(4,4)
 		for index in range (i,j+1):
 			h_cummulative = np.dot(h_cummulative, self.constructA(index))
@@ -185,15 +183,30 @@ def JointStateCallback(msg, bot):
 			if input_joint_name == joint_name:
 				#change this joint's position
 				bot.desiredDhParams[joint_index][1] = msg.position[input_joint_index]
-def talker(bot):
+
+def arm_sim(bot, interploation_rate):
+	rospy.init_node('talker', anonymous=True)
 	#publish to the marker channel(visualization_marker)
 	#reference: http://wiki.ros.org/rviz/DisplayTypes/Marker
 	#reference: http://answers.ros.org/question/11135/plotting-a-markerarray-of-spheres-with-rviz/
-	rospy.init_node('talker', anonymous=True)
 	array_pub = rospy.Publisher('visualization_marker_array', MarkerArray, queue_size=10)
 	marker_pub = rospy.Publisher('visualization_marker', Marker, queue_size=10)
-	rate = rospy.Rate(10) # 1hz
+	rate = rospy.Rate(10)
 	rospy.Subscriber("joint_state", JointState, JointStateCallback, callback_args=bot)
+
+	#setup the stuff in a marker that doesn't change
+	marker_ref = Marker()
+	marker_ref.header.frame_id = "/base"
+	marker_ref.type = marker_ref.CUBE
+	marker_ref.action = marker_ref.ADD
+	marker_ref.scale.x = 0.1
+	marker_ref.scale.y = 0.1
+	marker_ref.scale.z = 0.1
+	marker_ref.color.r = 1.0
+	marker_ref.color.g = 0.0
+	marker_ref.color.b = 1.0
+	marker_ref.color.a = 1.0
+
 	while not rospy.is_shutdown():
 		all_markers = MarkerArray()
 		all_lines = Marker()
@@ -206,41 +219,48 @@ def talker(bot):
 		all_lines.color.g = 1.0
 		all_lines.color.b = 0.0
 		all_lines.color.a = 1.0
+		#push the origin to the visualization lists
+		all_lines.points.append(geometry_msgs.msg.Point(0,0,0))
+		
+		#Render each joint
 		for joint_index in range(0,len(bot.dhParams)):
-			marker = Marker()
+			marker = copy.deepcopy(marker_ref)
 			marker.id = joint_index
-			marker.header.frame_id = "/base"
-			marker.type = marker.CUBE
-			marker.action = marker.ADD
-			marker.scale.x = 0.1
-			marker.scale.y = 0.1
-			marker.scale.z = 0.1
-			marker.color.r = 1.0 - (float(joint_index) / len(bot.dhParams))
-			marker.color.g = 0.0
-			marker.color.b = 0.0 + (float(joint_index) / len(bot.dhParams))
-			marker.color.a = 1.0
+			marker.color.r = 1.0 - (float(joint_index) / len(bot.dhParams)) # gives joints a gradient
+			marker.color.b = 0.0 + (float(joint_index) / len(bot.dhParams)) # gives joints a gradient
+
 			#interpolate the current and desired params to make visualization easier
 			for param_index in range(0,4):
 				param_diff = bot.dhParams[joint_index][param_index] - bot.desiredDhParams[joint_index][param_index]
 				if abs(param_diff) < 0.01 and param_diff != 0:
 					bot.dhParams[joint_index][param_index] = bot.desiredDhParams[joint_index][param_index]
 				elif param_diff != 0:
-					bot.dhParams[joint_index][param_index] -= param_diff * 0.15
+					bot.dhParams[joint_index][param_index] -= param_diff * interploation_rate
+			#get a transform from the base to this joint
 			h_transform = bot.getT(0,joint_index)
+			#Put the transform into the marker message
 			[marker.pose.orientation.w,marker.pose.orientation.x,marker.pose.orientation.y,marker.pose.orientation.z] = matToQuat(h_transform[0:3,0:3])
 			marker.pose.position.x = h_transform[0,3]
 			marker.pose.position.y = h_transform[1,3]
 			marker.pose.position.z = h_transform[2,3]
+			#store marker
 			all_markers.markers.append(marker)
+			#store line segment
 			all_lines.points.append(marker.pose.position)
+		#publish the lines and markers
 		array_pub.publish(all_markers)
 		marker_pub.publish(all_lines)
 		rate.sleep()
 
 if __name__ == '__main__':
+	#during debugging, configure numpy to print H matrices in an easy to read format
 	np.set_printoptions(linewidth=150)
 	try:
-		bot = MyRobot("robot_test.json",10)
-		talker(bot)
+		#Scales the joints so they are actually visible in rviz
+		linear_scale = 10
+		#Set interpolation to 1.0 to disable interpolation
+		interploation_rate = 0.15
+		bot = MyRobot("robot_test.json",linear_scale)
+		arm_sim(bot, interploation_rate)
 	except rospy.ROSInterruptException:
 		pass
