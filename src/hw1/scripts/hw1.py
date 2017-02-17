@@ -128,29 +128,29 @@ class MyRobot:
 		#reference for numpy.dot: https://docs.scipy.org/doc/numpy/reference/generated/numpy.dot.html
 		a *= self.linear_scale
 		d *= self.linear_scale
-		h_transform = np.dot(GetHTranslateMatrix(0,0,d),h_transform)
-		h_transform = np.dot(GetHRotationMatrix(0,0,theta),h_transform)
-		#rotate a to the new orientation
-		a_rotated = np.dot(GetHRotationMatrix(0,0,theta),GetHTranslateMatrix(a,0,0))
-		h_transform = np.dot(GetHTranslateMatrix(a_rotated[0,3] ,a_rotated[1,3],a_rotated[2,3]),h_transform)
-		h_transform = np.dot(GetHRotationMatrix(alpha,0,0),h_transform)
+		#h_transform = np.dot(GetHTranslateMatrix(0,0,d),h_transform)
+		#h_transform = np.dot(GetHRotationMatrix(0,0,theta),h_transform)
+		##rotate a to the new orientation
+		#a_rotated = np.dot(GetHRotationMatrix(0,0,theta),GetHTranslateMatrix(a,0,0))
+		#h_transform = np.dot(GetHTranslateMatrix(a_rotated[0,3] ,a_rotated[1,3],a_rotated[2,3]),h_transform)
+		#h_transform = np.dot(GetHRotationMatrix(alpha,0,0),h_transform)
 
 
 		#alternative method #2: the full matrix. This produces different results. I'm not sure why.
 		#Reference: http://web.aeromech.usyd.edu.au//MTRX4700/Course_Documents/material/lectures/L2_Kinematics_Dynamics_2013.pdf
-		#h_transform[0,0] = math.cos(theta);
-		#h_transform[0,1] = -math.sin(theta)*math.cos(alpha);
-		#h_transform[0,2] = math.sin(theta)*math.sin(alpha);
-		#h_transform[0,3] = a * math.cos(theta);
-		#
-		#h_transform[1,0] = math.sin(theta);
-		#h_transform[1,1] = math.cos(theta)*math.cos(alpha);
-		#h_transform[1,2] = -math.cos(theta)*math.sin(alpha);
-		#h_transform[1,3] = a * math.sin(theta);
-		#
-		#h_transform[2,1] = math.sin(theta);
-		#h_transform[2,2] = math.cos(theta);
-		#h_transform[2,3] = d;
+		h_transform[0,0] = math.cos(theta);
+		h_transform[0,1] = -math.sin(theta)*math.cos(alpha);
+		h_transform[0,2] = math.sin(theta)*math.sin(alpha);
+		h_transform[0,3] = a * math.cos(theta);
+		
+		h_transform[1,0] = math.sin(theta);
+		h_transform[1,1] = math.cos(theta)*math.cos(alpha);
+		h_transform[1,2] = -math.cos(theta)*math.sin(alpha);
+		h_transform[1,3] = a * math.sin(theta);
+		
+		h_transform[2,1] = math.sin(theta);
+		h_transform[2,2] = math.cos(theta);
+		h_transform[2,3] = d;
 
 
 		#alternative method #3: the simple revolute-only method from Dave's slides
@@ -182,7 +182,7 @@ def JointStateCallback(msg, bot):
 		for joint_index, joint_name in enumerate(bot.jointNames):
 			if input_joint_name == joint_name:
 				#change this joint's position
-				bot.desiredDhParams[joint_index][1] = msg.position[input_joint_index]
+				bot.desiredDhParams[joint_index][3] = msg.position[input_joint_index]
 
 def arm_sim(bot, interploation_rate):
 	rospy.init_node('talker', anonymous=True)
