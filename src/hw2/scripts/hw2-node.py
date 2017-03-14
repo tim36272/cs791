@@ -4,6 +4,7 @@ from std_msgs.msg import String
 import numpy as np
 from visualization_msgs.msg import *
 import baxter_core_msgs.msg
+import hw2.msg
 from sensor_msgs.msg import *
 import math
 import pudb
@@ -159,8 +160,8 @@ class MyRobot:
 		h_transform[1,2] = -math.cos(theta)*math.sin(alpha);
 		h_transform[1,3] = a * math.sin(theta);
 		
-		h_transform[2,1] = math.sin(theta);
-		h_transform[2,2] = math.cos(theta);
+		h_transform[2,1] = math.sin(alpha);
+		h_transform[2,2] = math.cos(alpha);
 		h_transform[2,3] = d;
 
 
@@ -198,6 +199,8 @@ def JointStateCallback(msg, bot):
 				bot.tInitial[joint_index] = rospy.get_rostime().to_sec()
 				bot.tFinal[joint_index] = bot.tInitial[joint_index] + bot.time_per_movement
 
+				if joint_name == 'joint_2':
+					bot.desiredDhParams[joint_index][3] += 1.5707963267948966
 				#First, In the cubic motion equations, there are four parameters: a0, a1, a2, and a3, which are the coefficients of the polynomial, i.e.:
 				#	a3*t^3 + a2*t^2 + a1*t + a0=qf				(equation 1)
 				#Where qf is the final position of the system
@@ -234,8 +237,11 @@ END_TIME_TOLERANCE = 0.5
 def arm_sim(bot, interploation_rate):
 	rospy.init_node('talker', anonymous=True)
 	joint_vel_pub = rospy.Publisher('/robot/limb/right/joint_command', baxter_core_msgs.msg.JointCommand, queue_size=10)
+	jacobian_pub = rospy.Publisher('/hw2/jacobian', hw2.msg.Jacobian, queue_size=10)
 	rate = rospy.Rate(1000)
 	rospy.Subscriber("joint_state", JointState, JointStateCallback, callback_args=bot)
+
+	num_joints = len(BAXTER_RIGHT_JOINT_NAMES)
 
 	#Time reference: http://wiki.ros.org/rospy/Overview/Time
 	#Give ROS time to connect and get the time
@@ -273,9 +279,29 @@ def arm_sim(bot, interploation_rate):
 			joint_vel_pub.publish(joint_cmd)
 			bot.supressCommand -= 1
 			#print("Commanding"+str(joint_cmd.command))
-		states = "Current joint state:"
+		states = "State:"
+		jacobian = np.zeros((6,num_joints))
+		#compute the position of the end efector
+		#This is easy given the Project 1 code: just compute the homogeneous transform of the end effector and take the rightmost column
+		h_transform_end_effector = bot.getT(0,num_joints-1)
 		for joint_index,name in enumerate(BAXTER_RIGHT_JOINT_NAMES):
 			states += " q"+str(joint_index)+"="+str(bot.dhParams[joint_index][3])
+			#compute the jacobian for this joint
+			#compute the position of this joint
+			h_transform_this_joint = bot.getT(0,joint_index-1)
+			#The equation for the first three rows of the i'th column of the jacobian is:
+			#	Jp_i=z_{i-1} x (P_e-P_i-1)
+			joint_position = (h_transform_end_effector - h_transform_this_joint)[0:3,-1]
+			#The z axis of the previous joint is just the third column (column 2) of the homogeneous matrix
+			z_vector_previous_joint = h_transform_this_joint[0:3,2]
+			jacobian[0:3,joint_index] = np.cross(z_vector_previous_joint,joint_position)
+			jacobian[3:6,joint_index] = z_vector_previous_joint
+		jacobian = np.round(jacobian,15)
+		#print jacobian
+		jacobian_msg = hw2.msg.Jacobian()
+		jacobian_msg.j = jacobian.reshape(1, 6*num_joints).tolist()[0]
+		#pudb.set_trace()
+		jacobian_pub.publish(jacobian_msg)
 		print(states)
 
 		rate.sleep()
@@ -285,7 +311,7 @@ if __name__ == '__main__':
 	np.set_printoptions(linewidth=150)
 	try:
 		#Scales the joints so they are actually visible in rviz
-		linear_scale = 5
+		linear_scale = 1
 		#Set interpolation to 1.0 to disable interpolation
 		interploation_rate = 0.15
 		bot = MyRobot("baxter.json",linear_scale)
