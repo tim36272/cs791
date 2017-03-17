@@ -10,6 +10,11 @@ import math
 import pudb
 import copy
 
+#begin edits by Chad Adams
+from geometry_msgs.msg import Vector3
+from std_msgs.msg import Header
+#end edits
+
 def matToQuat(mat):
 	#Reference: http://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToQuaternion/
 	trace = mat[0,0] + mat[1,1] + mat[2,2]
@@ -284,6 +289,13 @@ def arm_sim(bot, interploation_rate):
 		#compute the position of the end efector
 		#This is easy given the Project 1 code: just compute the homogeneous transform of the end effector and take the rightmost column
 		h_transform_end_effector = bot.getT(0,num_joints-1)
+		
+		#begin edits by Chad Adams
+		#jacobian_msg = hw2.msg.Jacobian()
+		#jp = np.zeros((3,num_joints))
+		#jo = np.zeros((3,num_joints))
+		#end edits
+		
 		for joint_index,name in enumerate(BAXTER_RIGHT_JOINT_NAMES):
 			states += " q"+str(joint_index)+"="+str(bot.dhParams[joint_index][3])
 			#compute the jacobian for this joint
@@ -294,12 +306,27 @@ def arm_sim(bot, interploation_rate):
 			joint_position = (h_transform_end_effector - h_transform_this_joint)[0:3,-1]
 			#The z axis of the previous joint is just the third column (column 2) of the homogeneous matrix
 			z_vector_previous_joint = h_transform_this_joint[0:3,2]
-			jacobian[0:3,joint_index] = np.cross(z_vector_previous_joint,joint_position)
+			jacobian[0:3,joint_index] = np.cross(z_vector_previous_joint,joint_position)			
 			jacobian[3:6,joint_index] = z_vector_previous_joint
+			
+			#edits by Chad Adams
+			#jp[0:3,joint_index] = np.cross(z_vector_previous_joint,joint_position
+			#jo[0:3,joint_index] = z_vector_previous_joint
+			#end edits
+			
 		jacobian = np.round(jacobian,15)
 		#print jacobian
 		jacobian_msg = hw2.msg.Jacobian()
 		jacobian_msg.j = jacobian.reshape(1, 6*num_joints).tolist()[0]
+		
+		#begin edits by Chad Adams
+		#jacobian_msg.header = "HW2 jacobian by Chad Adams & Tim Sweet"
+		#jp = np.round(jp,15)
+		#jo = np.round(jo,15)
+		#jacobian_msg.JP = np.append(jacobian_msg.JP,jp)
+		#jacobian_msg.JO = np.append(jacobian_msg.JO,jo)
+		#end edits
+		
 		#pudb.set_trace()
 		jacobian_pub.publish(jacobian_msg)
 		print(states)
