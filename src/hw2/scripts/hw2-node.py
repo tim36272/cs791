@@ -5,7 +5,6 @@ import numpy as np
 from visualization_msgs.msg import *
 import baxter_core_msgs.msg
 import hw2.msg
-from sensor_msgs.msg import *
 import math
 import pudb
 import copy
@@ -88,17 +87,24 @@ class MyRobot:
 				print self.jointNames[joint_index+1] + " did not match " + self.jointParent[joint_index]
 				exit()
 		self.desiredDhParams = copy.deepcopy(self.dhParams)
+		self.nextDesiredDhParams = []
 		self.currentVelocity = [0] * len(self.dhParams)
 		self.lastDhParams = self.dhParams
 		self.a0 = [0] * len(self.dhParams)
 		self.a1 = [0] * len(self.dhParams)
 		self.a2 = [0] * len(self.dhParams)
 		self.a3 = [0] * len(self.dhParams)
+		self.nexta0 = []
+		self.nexta1 = []
+		self.nexta2 = []
+		self.nexta3 = []
 		self.tInitial = [0] * len(self.dhParams)
+		self.nextTInitial = []
 		self.tFinal = [0] * len(self.dhParams)
-		self.time_per_movement = 5.0
+		self.nextTFinal = []
 		self.supressCommand = 0
-
+		self.nextTKPrime = []
+		self.tKPrime = []
 	def parseDHFile(self, DHparams):
 		# list of 4-tuples (a, alpha, d, theta)
 		if type(DHparams) == dict:
@@ -193,17 +199,68 @@ class MyRobot:
 			h_cummulative = np.dot(h_cummulative, self.constructA(index))
 		return h_cummulative
 
-#reference joint state message: http://docs.ros.org/api/sensor_msgs/html/msg/JointState.html
-def JointStateCallback(msg, bot):
+
+def TrajectoryMultiCommandCallback(msg,bot):
+	#setup data structures
+	start_time = rospy.get_rostime().to_sec()
+	bot.nextDesiredDhParams = []
+	bot.nextTFinal = []
+	bot.nextTInitial = []
+	bot.nexta0 = []
+	bot.nexta1 = []
+	bot.nexta2 = []
+	bot.nexta3 = []
+	bot.nextTKPrime = []
+	for path_index in range(0,len(msg.points)):
+		bot.nextDesiredDhParams.append(copy.deepcopy(bot.desiredDhParams))
+		bot.nextTFinal.append([0] * len(msg.points[path_index].names))
+		bot.nextTInitial.append([0] * len(msg.points[path_index].names))
+		bot.nexta0.append([0] * len(msg.points[path_index].names))
+		bot.nexta1.append([0] * len(msg.points[path_index].names))
+		bot.nexta2.append([0] * len(msg.points[path_index].names))
+		bot.nexta3.append([0] * len(msg.points[path_index].names))
+
+	previous_position = []
+	for param in bot.dhParams:
+		previous_position.append(param[3])
+
+	for path_index,point in enumerate(msg.points):
+		bot.nextTKPrime.append(point.t_k_prime.data.to_sec())
+		time_per_movement = point.t_k.data.to_sec()
+		bot.nextDesiredDhParams[path_index] = copy.deepcopy(bot.desiredDhParams)
+		for input_joint_index, input_joint_name in enumerate(point.names):
+			for joint_index, joint_name in enumerate(bot.jointNames):
+				if input_joint_name == joint_name:
+					desired_position = point.q_final[input_joint_index]
+					if joint_name == 'joint_2':
+						desired_position += 1.5707963267948966
+					bot.nextTInitial[path_index][joint_index] = start_time + time_per_movement * path_index
+					bot.nextTFinal[path_index][joint_index] = bot.nextTInitial[path_index][joint_index] + time_per_movement
+					
+					#For a linear trajectory, the equations of motion are simply:
+					#	a1*t + a0 = qf
+					#	a1 = derivative_qf
+					#Where a1 is the linear velocity and a0 is the starting position
+					bot.nexta0[path_index][joint_index] = previous_position[joint_index]
+					bot.nexta1[path_index][joint_index] = (desired_position - previous_position[joint_index]) / time_per_movement
+					previous_position[joint_index] = desired_position
+					
+					#Set this last for pseudo thread safety
+					bot.nextDesiredDhParams[path_index][joint_index][3] = desired_position
+					bot.supressCommand = ZERO_VEL_RETRANSMISSIONS
+
+
+def TrajectoryCommandCallback(msg, bot):
 	print("<new coefficients:>")
-	for input_joint_index, input_joint_name in enumerate(msg.name):
+	time_per_movement = msg.t_k.data.to_sec()
+	for input_joint_index, input_joint_name in enumerate(msg.names):
 		for joint_index, joint_name in enumerate(bot.jointNames):
 			if input_joint_name == joint_name:
 				#change this joint's position
-				bot.desiredDhParams[joint_index][3] = msg.position[input_joint_index]
+				bot.desiredDhParams[joint_index][3] = msg.q_final[input_joint_index]
 				bot.tInitial[joint_index] = rospy.get_rostime().to_sec()
-				bot.tFinal[joint_index] = bot.tInitial[joint_index] + bot.time_per_movement
-
+				bot.tFinal[joint_index] = bot.tInitial[joint_index] + time_per_movement
+				velocityFinal = msg.qdot_final[input_joint_index]
 				if joint_name == 'joint_2':
 					bot.desiredDhParams[joint_index][3] += 1.5707963267948966
 				#First, In the cubic motion equations, there are four parameters: a0, a1, a2, and a3, which are the coefficients of the polynomial, i.e.:
@@ -217,14 +274,14 @@ def JointStateCallback(msg, bot):
 				bot.a0[joint_index]=bot.dhParams[joint_index][3] #bot.dhParams stores the current believed state of the system
 				bot.a1[joint_index]= bot.currentVelocity[joint_index]
 				bot.qf=bot.desiredDhParams[joint_index][3]
-				bot.derivative_qf = 0
+				bot.derivative_qf = velocityFinal
 
 				#Now we have two equations (equation 1 and equation 2) and two unknowns (a2 and a3)
 				#Numpy's linalg.solve expects the variables to be on the left, so format the equations as:
 				#	a3*t^3 + a2*t^2 = qf - a1*t - a0
 				#	3*a3*t^2 + 2*a2*t = derivative_qf - a1
-				motion_equation_lhs = np.array([[1*math.pow(bot.time_per_movement,3.0),1.0*math.pow(bot.time_per_movement,2.0)],[3.0*math.pow(bot.time_per_movement,2.0),2.0*bot.time_per_movement]])
-				motion_equation_rhs = np.array([bot.qf-bot.a1[joint_index]*bot.time_per_movement-bot.a0[joint_index],bot.derivative_qf-bot.a1[joint_index]])
+				motion_equation_lhs = np.array([[1*math.pow(time_per_movement,3.0),1.0*math.pow(time_per_movement,2.0)],[3.0*math.pow(time_per_movement,2.0),2.0*time_per_movement]])
+				motion_equation_rhs = np.array([bot.qf-bot.a1[joint_index]*time_per_movement-bot.a0[joint_index],bot.derivative_qf-bot.a1[joint_index]])
 				motion_equation_result = np.linalg.solve(motion_equation_lhs, motion_equation_rhs)
 				bot.a3[joint_index] = motion_equation_result[0]
 				bot.a2[joint_index] = motion_equation_result[1]
@@ -244,7 +301,8 @@ def arm_sim(bot, interploation_rate):
 	joint_vel_pub = rospy.Publisher('/robot/limb/right/joint_command', baxter_core_msgs.msg.JointCommand, queue_size=10)
 	jacobian_pub = rospy.Publisher('/hw2/jacobian', hw2.msg.Jacobian, queue_size=10)
 	rate = rospy.Rate(1000)
-	rospy.Subscriber("joint_state", JointState, JointStateCallback, callback_args=bot)
+	rospy.Subscriber("trajectory_command", hw2.msg.TrajectoryCommand, TrajectoryCommandCallback, callback_args=bot)
+	rospy.Subscriber("trajectory_multi_command", hw2.msg.TrajectoryMultiCommand, TrajectoryMultiCommandCallback, callback_args=bot)
 
 	num_joints = len(BAXTER_RIGHT_JOINT_NAMES)
 
@@ -266,10 +324,26 @@ def arm_sim(bot, interploation_rate):
 			if (abs(bot.dhParams[joint_index][3] - bot.desiredDhParams[joint_index][3]) > ENDING_POSITION_TOLERANCE) and (t_now < (bot.tFinal[joint_index]+END_TIME_TOLERANCE)):
 				#We can use these equations to compute the required velocity of the system at any point in time
 				t = (t_now - bot.tInitial[joint_index])
-				velocity_this_step = 3*bot.a3[joint_index]*pow(t,2) + 2*bot.a2[joint_index]*t + bot.a1[joint_index]
+				#check if we need to blend this velocity
+				blended_a3 = bot.a3[joint_index]
+				blended_a2 = bot.a2[joint_index]
+				blended_a1 = bot.a1[joint_index]
+				blended_a0 = bot.a0[joint_index]
+
+				if bot.nextDesiredDhParams != []:
+					#There is another trajectory coming up, so blend to it
+					t_blend = (bot.tFinal[joint_index] - t_now) # this gives seconds until changeover
+					if t_blend > bot.nextTKPrime[0]:
+						t_blend = bot.nextTKPrime[0]
+					alpha = t_blend / bot.nextTKPrime[0]
+					blended_a3 = bot.a3[joint_index]*alpha + bot.nexta3[0][joint_index]*(1.0-alpha)
+					blended_a2 = bot.a2[joint_index]*alpha + bot.nexta2[0][joint_index]*(1.0-alpha)
+					blended_a1 = bot.a1[joint_index]*alpha + bot.nexta1[0][joint_index]*(1.0-alpha)
+					blended_a0 = bot.a0[joint_index]*alpha + bot.nexta0[0][joint_index]*(1.0-alpha)
+				velocity_this_step = 3*blended_a3*pow(t,2) + 2*blended_a2*t + blended_a1
 
 				#Store the new position of the joint by solving equation 1 for qf at the current time
-				bot.dhParams[joint_index][3] = bot.a3[joint_index]*math.pow(t,3) + bot.a2[joint_index]*math.pow(t,2) + bot.a1[joint_index]*t + bot.a0[joint_index]
+				bot.dhParams[joint_index][3] = blended_a3*math.pow(t,3) + blended_a2*math.pow(t,2) + blended_a1*t + blended_a0
 				joint_still_moving = True
 			else:
 				velocity_this_step = 0
@@ -281,20 +355,41 @@ def arm_sim(bot, interploation_rate):
 			joint_vel_pub.publish(joint_cmd)
 			#print("Commanding"+str(joint_cmd.command))
 		elif bot.supressCommand != 0:
+			joint_cmd.command = [0 for x in range(0,len(BAXTER_RIGHT_JOINT_NAMES))]
+			#print joint_cmd
 			joint_vel_pub.publish(joint_cmd)
 			bot.supressCommand -= 1
 			#print("Commanding"+str(joint_cmd.command))
+		elif bot.nextDesiredDhParams != []:
+				#apply these new params
+				bot.desiredDhParams = bot.nextDesiredDhParams[0]
+				bot.a0 = bot.nexta0[0]
+				bot.a1 = bot.nexta1[0]
+				bot.a2 = bot.nexta2[0]
+				bot.a3 = bot.nexta3[0]
+				bot.tFinal = bot.nextTFinal[0]
+				bot.tKPrime = bot.nextTKPrime[0]
+				bot.tInitial = bot.nextTInitial[0]
+				
+				bot.nextDesiredDhParams = bot.nextDesiredDhParams[1:]
+				bot.nexta0 = bot.nexta0[1:]
+				bot.nexta1 = bot.nexta1[1:]
+				bot.nexta2 = bot.nexta2[1:]
+				bot.nexta3 = bot.nexta3[1:]
+				bot.nextTFinal = bot.nextTFinal[1:]
+				bot.nextTKPrime = bot.nextTKPrime[1:]
+				bot.nextTInitial = bot.nextTInitial[1:]
+				print "Executing next trajectory, "+str(len(bot.nextDesiredDhParams))+" remain"
+				bot.supressCommand = ZERO_VEL_RETRANSMISSIONS
+
 		states = "State:"
-		jacobian = np.zeros((6,num_joints))
 		#compute the position of the end efector
 		#This is easy given the Project 1 code: just compute the homogeneous transform of the end effector and take the rightmost column
 		h_transform_end_effector = bot.getT(0,num_joints-1)
 		
-		#begin edits by Chad Adams
 		jacobian_msg = hw2.msg.Jacobian()
 		jp = np.zeros((3,num_joints))
 		jo = np.zeros((3,num_joints))
-		#end edits
 		
 		for joint_index,name in enumerate(BAXTER_RIGHT_JOINT_NAMES):
 			states += " q"+str(joint_index)+"="+str(bot.dhParams[joint_index][3])
@@ -305,30 +400,24 @@ def arm_sim(bot, interploation_rate):
 			#	Jp_i=z_{i-1} x (P_e-P_i-1)
 			joint_position = (h_transform_end_effector - h_transform_this_joint)[0:3,-1]
 			#The z axis of the previous joint is just the third column (column 2) of the homogeneous matrix
-			z_vector_previous_joint = h_transform_this_joint[0:3,2]
-			jacobian[0:3,joint_index] = np.cross(z_vector_previous_joint,joint_position)			
-			jacobian[3:6,joint_index] = z_vector_previous_joint
-			
-			#edits by Chad Adams
+			z_vector_previous_joint = h_transform_this_joint[0:3,2]			
 			jp[0:3,joint_index] = np.cross(z_vector_previous_joint,joint_position)
 			jo[0:3,joint_index] = z_vector_previous_joint
-			#end edits
-			
-		jacobian = np.round(jacobian,15)
-		#print jacobian
-		#jacobian_msg = hw2.msg.Jacobian()
-		jacobian_msg.j = jacobian.reshape(1, 6*num_joints).tolist()[0]
+
+			#Format this as ROS wants it
+			jp_col = np.round(jp[0:3,joint_index],15)
+			jp_vector = Vector3(jp_col[0],jp_col[1],jp_col[2])
+			jacobian_msg.JP.append(jp_vector)
+
+			jo_col = np.round(jo[0:3,joint_index],15)
+			jo_vector = Vector3(jo_col[0],jo_col[1],jo_col[2])
+			jacobian_msg.JO.append(jo_vector)
+
 		
-		#begin edits by Chad Adams
-		jacobian_msg.header = "HW2 jacobian"
-		jacobian_msg.names = "by Chad Adams & Tim Sweet"
-		jp = np.round(jp,15)
-		jo = np.round(jo,15)
-		jacobian_msg.JP = np.append(jacobian_msg.JP,jp)
-		jacobian_msg.JO = np.append(jacobian_msg.JO,jo)
-		#end edits
+		jacobian_msg.header.stamp = rospy.Time.now()
+		jacobian_msg.header.frame_id = "0"
+		jacobian_msg.names = BAXTER_RIGHT_JOINT_NAMES
 		
-		#pudb.set_trace()
 		jacobian_pub.publish(jacobian_msg)
 		print(states)
 

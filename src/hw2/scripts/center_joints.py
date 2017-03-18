@@ -234,7 +234,7 @@ END_TIME_TOLERANCE = 0.5
 def arm_sim(bot, interploation_rate):
 	rospy.init_node('talker', anonymous=True)
 	joint_vel_pub = rospy.Publisher('/robot/limb/right/joint_command', baxter_core_msgs.msg.JointCommand, queue_size=10)
-	rate = rospy.Rate(1000)
+	rate = rospy.Rate(10)
 	rospy.Subscriber("joint_state", JointState, JointStateCallback, callback_args=bot)
 
 	num_joints = len(BAXTER_RIGHT_JOINT_NAMES)
@@ -247,6 +247,8 @@ def arm_sim(bot, interploation_rate):
 	rate.sleep()
 	print "Ready"
 
+	iters = 5
+
 	while not rospy.is_shutdown():
 		joint_cmd = baxter_core_msgs.msg.JointCommand()
 		joint_cmd.mode = joint_cmd.POSITION_MODE
@@ -256,7 +258,10 @@ def arm_sim(bot, interploation_rate):
 			joint_cmd.command.append(0)
 		joint_vel_pub.publish(joint_cmd)
 		rate.sleep()
-
+		if iters == 0:
+			quit()
+		else:
+			iters -= 1
 if __name__ == '__main__':
 	#during debugging, configure numpy to print H matrices in an easy to read format
 	np.set_printoptions(linewidth=150)
