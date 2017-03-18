@@ -358,8 +358,8 @@ def arm_sim(bot, interploation_rate):
 			joint_vel_pub.publish(joint_cmd)
 			#print("Commanding"+str(joint_cmd.command))
 		elif bot.supressCommand != 0:
-			joint_cmd.command = [0 for x in range(0,len(BAXTER_RIGHT_JOINT_NAMES))]
-			#print joint_cmd
+			#When working with the real robot you'll want the line below so that the arm doesn't keep moving when an action is compelte:
+			#joint_cmd.command = [0 for x in range(0,len(BAXTER_RIGHT_JOINT_NAMES))]
 			joint_vel_pub.publish(joint_cmd)
 			bot.supressCommand -= 1
 			#print("Commanding"+str(joint_cmd.command))
