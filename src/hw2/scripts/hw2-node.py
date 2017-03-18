@@ -1,3 +1,6 @@
+#
+#  CS791 Assignment 2: Team Tim Sweet and Chad Adams
+#
 #!/usr/bin/python
 import rospy
 from std_msgs.msg import String
