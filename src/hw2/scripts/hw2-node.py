@@ -291,9 +291,9 @@ def arm_sim(bot, interploation_rate):
 		h_transform_end_effector = bot.getT(0,num_joints-1)
 		
 		#begin edits by Chad Adams
-		#jacobian_msg = hw2.msg.Jacobian()
-		#jp = np.zeros((3,num_joints))
-		#jo = np.zeros((3,num_joints))
+		jacobian_msg = hw2.msg.Jacobian()
+		jp = np.zeros((3,num_joints))
+		jo = np.zeros((3,num_joints))
 		#end edits
 		
 		for joint_index,name in enumerate(BAXTER_RIGHT_JOINT_NAMES):
@@ -310,21 +310,21 @@ def arm_sim(bot, interploation_rate):
 			jacobian[3:6,joint_index] = z_vector_previous_joint
 			
 			#edits by Chad Adams
-			#jp[0:3,joint_index] = np.cross(z_vector_previous_joint,joint_position
-			#jo[0:3,joint_index] = z_vector_previous_joint
+			jp[0:3,joint_index] = np.cross(z_vector_previous_joint,joint_position)
+			jo[0:3,joint_index] = z_vector_previous_joint
 			#end edits
 			
 		jacobian = np.round(jacobian,15)
 		#print jacobian
-		jacobian_msg = hw2.msg.Jacobian()
+		#jacobian_msg = hw2.msg.Jacobian()
 		jacobian_msg.j = jacobian.reshape(1, 6*num_joints).tolist()[0]
 		
 		#begin edits by Chad Adams
-		#jacobian_msg.header = "HW2 jacobian by Chad Adams & Tim Sweet"
-		#jp = np.round(jp,15)
-		#jo = np.round(jo,15)
-		#jacobian_msg.JP = np.append(jacobian_msg.JP,jp)
-		#jacobian_msg.JO = np.append(jacobian_msg.JO,jo)
+		jacobian_msg.header = "HW2 jacobian by Chad Adams & Tim Sweet"
+		jp = np.round(jp,15)
+		jo = np.round(jo,15)
+		jacobian_msg.JP = np.append(jacobian_msg.JP,jp)
+		jacobian_msg.JO = np.append(jacobian_msg.JO,jo)
 		#end edits
 		
 		#pudb.set_trace()
