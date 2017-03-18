@@ -320,7 +320,8 @@ def arm_sim(bot, interploation_rate):
 		jacobian_msg.j = jacobian.reshape(1, 6*num_joints).tolist()[0]
 		
 		#begin edits by Chad Adams
-		jacobian_msg.header = "HW2 jacobian by Chad Adams & Tim Sweet"
+		jacobian_msg.header = "HW2 jacobian"
+		jacobian_msg.names = "by Chad Adams & Tim Sweet"
 		jp = np.round(jp,15)
 		jo = np.round(jo,15)
 		jacobian_msg.JP = np.append(jacobian_msg.JP,jp)
