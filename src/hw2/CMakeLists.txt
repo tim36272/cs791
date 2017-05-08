@@ -51,6 +51,8 @@ find_package(catkin REQUIRED COMPONENTS
  add_message_files(
    FILES
    Jacobian.msg
+   TrajectoryCommand.msg
+   TrajectoryMultiCommand.msg
  )
 
 ## Generate services in the 'srv' folder
@@ -71,6 +73,8 @@ find_package(catkin REQUIRED COMPONENTS
  generate_messages(
    DEPENDENCIES
    std_msgs
+   geometry_msgs
+   hw2
  )
 
 ################################################
