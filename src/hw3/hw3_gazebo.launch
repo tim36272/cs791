@@ -1,0 +1,4 @@
+<launch>
+<include file="$(find baxter_gazebo)/launch/baxter_world_no_gzclient.launch"/>
+</launch>
+
