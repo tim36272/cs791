@@ -7,43 +7,19 @@
             "joint_name":"joint_1",
             "parent_name": "Base",
             "joint_type":"revolute",
-            "DH_parameters": [0.0, 1.5707963267948966, 0.2, 0.0]
+            "DH_parameters": [0.0, 1.5707963267948966, 0.75, 3.141592653]
         },
         {
             "joint_name":"joint_2",
             "parent_name": "joint_1",
             "joint_type":"revolute",
-            "DH_parameters": [0.0, 0.7853981633974483, 0.2, 0.0]
+            "DH_parameters": [0.0, 1.5707963267948966, 0.75, 1.5707963267948966]
         },
         {
             "joint_name":"joint_3",
             "parent_name": "joint_2",
             "joint_type":"revolute",
-            "DH_parameters": [0.0, 0.7853981633974483, 0.1, 0.0]
-        },
-        {
-            "joint_name":"joint_4",
-            "parent_name": "joint_3",
-            "joint_type":"revolute",
-            "DH_parameters": [0.0, 0.7853981633974483, 0.1, 0.0]
-        },
-        {
-            "joint_name":"joint_5",
-            "parent_name": "joint_4",
-            "joint_type":"revolute",
-            "DH_parameters": [0.0, 0.7853981633974483, 0.1, 0.0]
-        },
-        {
-            "joint_name":"joint_6",
-            "parent_name": "joint_5",
-            "joint_type":"revolute",
-            "DH_parameters": [0.0, 0.7853981633974483, 0.05, 0.0]
-        },
-        {
-            "joint_name":"joint_7",
-            "parent_name": "joint_6",
-            "joint_type":"revolute",
-            "DH_parameters": [0.0, 0.0, 0.05, 0.0]
+            "DH_parameters": [0.0, 1.5707963267948966, 0.75, 1.5707963267948966]
         }
     ]
 }

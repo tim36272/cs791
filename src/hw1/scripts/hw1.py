@@ -207,6 +207,7 @@ def arm_sim(bot, interploation_rate):
 	marker_ref.color.b = 1.0
 	marker_ref.color.a = 1.0
 
+
 	while not rospy.is_shutdown():
 		all_markers = MarkerArray()
 		all_lines = Marker()
@@ -219,6 +220,22 @@ def arm_sim(bot, interploation_rate):
 		all_lines.color.g = 1.0
 		all_lines.color.b = 0.0
 		all_lines.color.a = 1.0
+
+
+		axis_ref = Marker()
+		axis_ref.header.frame_id = "/base"
+		axis_ref.id = len(bot.dhParams)+2
+		axis_ref.type = marker_ref.LINE_LIST
+		axis_ref.action = Marker.ADD
+		axis_ref.scale.x = 0.1
+		axis_ref.scale.y = 0.1
+		axis_ref.scale.z = 0.1
+		axis_ref.color.r = 1.0
+		axis_ref.color.g = 0.0
+		axis_ref.color.b = 1.0
+		axis_ref.color.a = 1.0
+
+
 		#push the origin to the visualization lists
 		all_lines.points.append(geometry_msgs.msg.Point(0,0,0))
 		
@@ -243,6 +260,28 @@ def arm_sim(bot, interploation_rate):
 			marker.pose.position.x = h_transform[0,3]
 			marker.pose.position.y = h_transform[1,3]
 			marker.pose.position.z = h_transform[2,3]
+			#create axis
+			ax = np.zeros((4,1))
+			ax[0] = 2
+			ax[3] = 1
+			ax = np.dot(h_transform,ax)
+			#axis_ref.points.append(marker.pose.position)
+			#axis_ref.points.append(geometry_msgs.msg.Point(ax[0],ax[1],ax[2]))
+
+			ax = np.zeros((4,1))
+			ax[1] = 2
+			ax[3] = 1
+			ax = np.dot(h_transform,ax)
+			#axis_ref.points.append(marker.pose.position)
+			#axis_ref.points.append(geometry_msgs.msg.Point(ax[0],ax[1],ax[2]))
+
+			ax = np.zeros((4,1))
+			ax[2] = 2
+			ax[3] = 1
+			ax = np.dot(h_transform,ax)
+			#axis_ref.points.append(marker.pose.position)
+			#axis_ref.points.append(geometry_msgs.msg.Point(ax[0],ax[1],ax[2]))
+
 			#store marker
 			all_markers.markers.append(marker)
 			#store line segment
@@ -250,6 +289,7 @@ def arm_sim(bot, interploation_rate):
 		#publish the lines and markers
 		array_pub.publish(all_markers)
 		marker_pub.publish(all_lines)
+		marker_pub.publish(axis_ref)
 		rate.sleep()
 
 if __name__ == '__main__':
@@ -257,7 +297,7 @@ if __name__ == '__main__':
 	np.set_printoptions(linewidth=150)
 	try:
 		#Scales the joints so they are actually visible in rviz
-		linear_scale = 10
+		linear_scale = 5
 		#Set interpolation to 1.0 to disable interpolation
 		interploation_rate = 0.15
 		bot = MyRobot("robot_test.json",linear_scale)
