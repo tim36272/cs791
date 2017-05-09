@@ -9,16 +9,17 @@ import geometry_msgs.msg
 import numpy as np
 import math
 import threading
-import hw3.msg #you may need to replace this with the message name which defines ChessCommand
+import project3.msg #you may need to replace this with the message name which defines ChessCommand
+import pudb
 
 
 shutdown_threads = False
 def publishTransforms(tf_broadcaster,current_piece_trans,above_current_piece_trans,above_desired_piece_trans,desired_piece_trans,piece_rot,now):
 	while not shutdown_threads:
-		tf_broadcaster.sendTransform(current_piece_trans,piece_rot,now, "/chesspiece","/chessboard")
-		tf_broadcaster.sendTransform(above_current_piece_trans,piece_rot,now, "/above_chesspiece","/chessboard")
-		tf_broadcaster.sendTransform(above_desired_piece_trans,piece_rot,now, "/above_chesspiece_target","/chessboard")
-		tf_broadcaster.sendTransform(desired_piece_trans,piece_rot,now, "/chesspiece_target","/chessboard")
+		tf_broadcaster.sendTransform(current_piece_trans,piece_rot,now, "/chesspiece","/checkerboard")
+		tf_broadcaster.sendTransform(above_current_piece_trans,piece_rot,now, "/above_chesspiece","/checkerboard")
+		tf_broadcaster.sendTransform(above_desired_piece_trans,piece_rot,now, "/above_chesspiece_target","/checkerboard")
+		tf_broadcaster.sendTransform(desired_piece_trans,piece_rot,now, "/chesspiece_target","/checkerboard")
 		now = rospy.Time.now()
 		rospy.sleep(0.1)
 		
@@ -60,13 +61,13 @@ display_trajectory_publisher = rospy.Publisher('/move_group/display_planned_path
 
 #Setup subscriber for input commands
 input_command = ["a1","a1",False]
-rospy.Subscriber("piece_movement", hw3.msg.ChessCommand, ChessCommandCallback, callback_args=input_command)
+rospy.Subscriber("piece_movement", project3.msg.ChessCommand, ChessCommandCallback, callback_args=input_command)
 
 #get the position of the chessboard with respect to the base (I assume it doesn't change during the simulation')
 have_transform = False
 while not have_transform:
 	try:
-		(board_trans, board_rot) = tf_listener.lookupTransform('base', 'chessboard', rospy.Time())
+		(board_trans, board_rot) = tf_listener.lookupTransform('base', 'checkerboard', rospy.Time())
 		have_transform = True
 	except(tf.LookupException):
 		continue
@@ -75,13 +76,14 @@ while not have_transform:
 #The third parameter yaws
 #The first paramter rotates about red (roll)
 piece_rot = (1,0,0,0)
-board_square_size = 0.02 # meters
+board_square_size = 0.0625 # meters
+chess_piece_height = 0.075
 print("")
 print("")
 print("Ready to receive commands")
-print("Conventions: * You must publish a tf transform /chessboard which is located at the center of square a1")
-print("             * The chessboard is facing toward +Z, so the gripper points toward -Z")
-print("             * The chessboard is "+str(board_square_size)+" meters per square, so be sure baxter can reach it.")
+print("Conventions: * You must publish a tf transform /checkerboard which is located at the center of square a1")
+print("             * The checkerboard is facing toward +Z, so the gripper points toward -Z")
+print("             * The checkerboard is "+str(board_square_size)+" meters per square, so be sure baxter can reach it.")
 print("               A good position is (0.5,0.3,0.0) at orientation (0,0,-sqrt(2)/2,sqrt(2)/2)")
 print("             * Publish the ChessCommand message on topic piece_movement")
 while not rospy.is_shutdown():
@@ -93,14 +95,14 @@ while not rospy.is_shutdown():
 	input_command[2] = False
 	print("Received command to: "+str(input_command[0:2]))
 	waypoints = []
-	#Parse the command
-	current_piece_index = (ord(input_command[0][0])-ord("a"),ord(input_command[0][1])-ord("1"))
-	desired_piece_index = (ord(input_command[1][0])-ord("a"),ord(input_command[1][1])-ord("1"))
+	#Parse the command. This subtracts 4.5 units so the end effector ends up centered on the desired cell
+	current_piece_index = (ord(input_command[0][1])-ord("1")-3.5,3.5-(ord(input_command[0][0])-ord("a")))
+	desired_piece_index = (ord(input_command[1][1])-ord("1")-3.5,3.5-(ord(input_command[1][0])-ord("a")))
 
 	#The translation is just (size of board square) * (square index) in each direction
 	current_piece_trans = (board_square_size * current_piece_index[0],board_square_size * current_piece_index[1],0)
-	above_current_piece_trans = (board_square_size * current_piece_index[0],board_square_size * current_piece_index[1],0.1)
-	above_desired_piece_trans = (board_square_size * desired_piece_index[0],board_square_size * desired_piece_index[1],0.1)
+	above_current_piece_trans = (board_square_size * current_piece_index[0],board_square_size * current_piece_index[1],chess_piece_height)
+	above_desired_piece_trans = (board_square_size * desired_piece_index[0],board_square_size * desired_piece_index[1],chess_piece_height)
 	desired_piece_trans = (board_square_size * desired_piece_index[0],board_square_size * desired_piece_index[1],0)
 	#publish these transforms to tf (done on a separate thread so that they are available throughout the planning)
 	t = threading.Thread(target=publishTransforms,args=(tf_broadcaster,current_piece_trans,above_current_piece_trans,above_desired_piece_trans,desired_piece_trans,piece_rot,now))
