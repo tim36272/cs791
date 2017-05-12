@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <launch>
   <!-- We resume the logic in empty_world.launch, changing the name of the world to be launched -->
-  <include file="$(find baxter_gazebo)/launch/baxter_world.launch"/>
+  <include file="$(find baxter_gazebo)/launch/baxter_world_no_gzclient.launch"/>
   <!-- static transform showing the position of the checkerboard -->
   <node pkg="tf" type="static_transform_publisher" name="board_link" args="0.5 0 0 0 0 0 base checkerboard 50"/>
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find project3)/launch/rviz_project3.config.rviz" />
