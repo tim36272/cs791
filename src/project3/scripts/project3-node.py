@@ -14,7 +14,7 @@ import moveit_msgs.msg
 import geometry_msgs.msg
 import math
 import threading
-
+import baxter_interface
 
 shutdown_threads = False
 
@@ -66,6 +66,8 @@ now = rospy.Time.now()
 while now == rospy.Time(0):
 	now = rospy.Time.now()
 
+#setup baxter
+left_gripper = baxter_interface.Gripper('left')
 #Setup tf and MoveIt!
 tf_listener = tf.TransformListener()
 tf_broadcaster = tf.TransformBroadcaster()
@@ -141,17 +143,22 @@ while not rospy.is_shutdown():
 	waypoints = addPose('/world','/chesspiece',              now+rospy.Duration(0.5),waypoints)
 	waypoints = addPose('/world','/above_chesspiece',        now+rospy.Duration(0.5),waypoints)
 	waypoints = addPose('/world','/above_chesspiece_target', now+rospy.Duration(0.5),waypoints)
-	waypoints = addPose('/world','/chesspiece_target',       now+rospy.Duration(0.5),waypoints)
-	waypoints = addPose('/world','/above_chesspiece_target', now+rospy.Duration(0.5),waypoints)
+	#waypoints = addPose('/world','/chesspiece_target',       now+rospy.Duration(0.5),waypoints)
+	#waypoints = addPose('/world','/above_chesspiece_target', now+rospy.Duration(0.5),waypoints)
 
 	#Execute the movement
-	for waypoint in waypoints:
+	for i,waypoint in enumerate(waypoints):
+		if i == 0:
+			left_gripper.open()
+		elif i == 2:
+			left_gripper.close()
 		group.set_pose_target(waypoint)
 		print("--Starting waypoint plan")
 		plan1 = group.plan()
 		print("----Starting waypoint command")
 		group.go(wait=True)
 		print("------Finished waypoint command")
+	left_gripper.open()
 	shutdown_threads = True
 	print("Piece movement is complete, ready to accept new command")
 shutdown_threads = True
