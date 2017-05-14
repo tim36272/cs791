@@ -4,10 +4,10 @@ Introduction
 This program implements CS791 Project 3. It is capable of accepting a "Piece Command" message per the definition posted on slack. When it receives said message, it will use MoveIt! to attempt to actuate the Baxter's left arm and perform the following actions:
 * Move the gripper 0.05 meters above "move_from"     (ready to pick up the piece)
 * Move the gripper to touch the board at "move_from" ("pickup" the piece")
+* Close the gripper                                  (new in this revision)
 * Move the gripper 0.05 meters above "move_from"     (move away from other pieces)
 * Move the gripper 0.05 meters above "move_to"       (prepare to set down the piece)
-* Move the gripper to touch the board at "move_to"   (set down the piece)
-* Move the gripper 0.05 meters above "move_to"       (move away from other pieces
+* Open the gripper                                   (new in this version)
 
 -----------------
 Quick Start Guide
@@ -65,3 +65,4 @@ My code depends on the following python packages:
 * math
 * threading
 * geometry_msgs.msg
+* baxter_interface
